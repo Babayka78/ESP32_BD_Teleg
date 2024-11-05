@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature Monitoring</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
+    <style>
+        .container {
+            width: 80%;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 60vh;
+            width: 100%;
+            margin-top: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        #statusIndicator {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-left: 10px;
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .timezone-info {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Temperature Monitoring Dashboard
+            <span id="statusIndicator">Active</span>
+        </h1>
+        <div class="timezone-info">Timezone: Asia/Tbilisi</div>
+        <div class="chart-container">
+            <canvas id="temperatureChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Настройка временной зоны
+        const timeZone = 'Asia/Tbilisi';
+        const DateTime = luxon.DateTime;
+
+        // Форматирование времени с учетом зоны
+        function formatTime(date) {
+            return DateTime.fromJSDate(date)
+                .setZone(timeZone)
+                .toFormat('HH:mm:ss')
+        }
+
+        let chart = null;
+        const statusIndicator = document.getElementById('statusIndicator');
+
+        function generateTestData() {
+            const now = DateTime.now().setZone(timeZone);
+            const timestamps = [];
+            const sensor1Data = [];
+            const sensor2Data = [];
+
+            for (let i = 9; i >= 0; i--) {
+                const time = now.minus({ hours: i });
+                timestamps.push(time.toLocaleString(DateTime.TIME_WITH_SECONDS));
+                sensor1Data.push(Math.random() * 10 + 20);
+                sensor2Data.push(Math.random() * 10 + 22);
+            }
+
+            return {
+                timestamps: timestamps,
+                sensor1: sensor1Data,
+                sensor2: sensor2Data
+            };
+        }
+
+        function createOrUpdateChart(data) {
+            const ctx = document.getElementById('temperatureChart').getContext('2d');
+
+            const chartData = {
+                labels: data.timestamps,
+                datasets: [
+                    {
+                        label: 'Sensor 1',
+                        data: data.sensor1,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'Sensor 2',
+                        data: data.sensor2,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true
+                    }
+                ]
+            };
+
+            const config = {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        tooltip: {
+                            enabled: true,
+                            callbacks: {
+                                title: function(context) {
+                                    return `Time: ${context[0].label} (${timeZone})`;
+                                }
+                            }
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: `Time (${timeZone})`
+                            }
+                        }
+                    }
+                }
+            };
+
+            if (chart) {
+                chart.destroy();
+            }
+            chart = new Chart(ctx, config);
+        }
+
+        function updateChart() {
+            statusIndicator.textContent = 'Updating...';
+            fetch('/api/temperature/history')
+                .then(response => response.json())
+                .then(data => {
+                    // Преобразование временных меток в нужный формат
+                    if (Array.isArray(data.timestamps)) {
+                        data.timestamps = data.timestamps.map(timestamp => {
+                            const dt = DateTime.fromISO(timestamp).setZone(timeZone);
+                            return dt.toLocaleString(DateTime.TIME_WITH_SECONDS);
+                        });
+                    }
+                    createOrUpdateChart(data);
+                    statusIndicator.textContent = 'Active';
+                })
+                .catch(() => {
+                    const testData = generateTestData();
+                    createOrUpdateChart(testData);
+                    statusIndicator.textContent = 'Test Data';
+                });
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            // Показываем тестовые данные сразу
+            const testData = generateTestData();
+            createOrUpdateChart(testData);
+            statusIndicator.textContent = 'Test Data';
+
+            // Обновляем каждые 30 секунд
+            setInterval(updateChart, 30000);
+        });
+    </script>
+</body>
+</html>

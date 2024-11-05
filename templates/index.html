@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature Monitoring</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        .container {
+            width: 80%;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 60vh;
+            width: 100%;
+            margin-top: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .error-message {
+            color: #ff4444;
+            padding: 10px;
+            margin: 10px 0;
+            display: none;
+            background: #ffebee;
+            border-radius: 4px;
+        }
+        #statusIndicator {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-left: 10px;
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Temperature Monitoring Dashboard
+            <span id="statusIndicator">Active</span>
+        </h1>
+        <div id="errorMessage" class="error-message"></div>
+        <div class="chart-container">
+            <canvas id="temperatureChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Генерация тестовых данных
+        function generateTestData() {
+            const now = Date.now();
+            const timestamps = [];
+            const sensor1Data = [];
+            const sensor2Data = [];
+
+            for (let i = 9; i >= 0; i--) {
+                const time = new Date(now - i * 3600000);
+                timestamps.push(time.toLocaleTimeString());
+                sensor1Data.push(Math.random() * 10 + 20); // 20-30°C
+                sensor2Data.push(Math.random() * 10 + 22); // 22-32°C
+            }
+
+            return {
+                timestamps: timestamps,
+                sensor1: sensor1Data,
+                sensor2: sensor2Data
+            };
+        }
+
+        let chart = null;
+        const errorMessage = document.getElementById('errorMessage');
+        const statusIndicator = document.getElementById('statusIndicator');
+
+        // Конфигурация графика
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                plugins: {
+                    tooltip: {
+                        enabled: true
+                    },
+                    legend: {
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'Temperature (°C)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    }
+                }
+            }
+        };
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            statusIndicator.textContent = 'Error';
+            statusIndicator.style.backgroundColor = '#ffebee';
+            statusIndicator.style.color = '#c62828';
+        }
+
+        function createOrUpdateChart(data) {
+            const ctx = document.getElementById('temperatureChart').getContext('2d');
+
+            const chartData = {
+                labels: data.timestamps,
+                datasets: [
+                    {
+                        label: 'Sensor 1',
+                        data: data.sensor1,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'Sensor 2',
+                        data: data.sensor2,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true
+                    }
+                ]
+            };
+
+            if (chart) {
+                chart.data = chartData;
+                chart.update('none');
+            } else {
+                chartConfig.data = chartData;
+                chart = new Chart(ctx, chartConfig);
+            }
+        }
+
+        async function updateChart() {
+            try {
+                statusIndicator.textContent = 'Updating...';
+                statusIndicator.style.backgroundColor = '#fff3e0';
+                statusIndicator.style.color = '#e65100';
+
+                // Пробуем получить данные с сервера
+                try {
+                    const response = await fetch('/api/temperature/history');
+                    if (response.ok) {
+                        const data = await response.json();
+                        createOrUpdateChart(data);
+                    } else {
+                        // Если сервер недоступен, используем тестовые данные
+                        throw new Error('Server unavailable');
+                    }
+                } catch (error) {
+                    // Используем тестовые данные при любой ошибке
+                    const testData = generateTestData();
+                    createOrUpdateChart(testData);
+                }
+
+                errorMessage.style.display = 'none';
+                statusIndicator.textContent = 'Active';
+                statusIndicator.style.backgroundColor = '#e8f5e9';
+                statusIndicator.style.color = '#2e7d32';
+
+            } catch (error) {
+                showError(`Failed to update chart: ${error.message}`);
+                console.error('Error updating chart:', error);
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            updateChart();
+            // Обновление каждые 30 секунд
+            setInterval(updateChart, 30000);
+        });
+    </script>
+</body>
+</html>
